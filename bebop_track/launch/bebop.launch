@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+	<node pkg="bebop_track" type="bebop_track_node" name="bebop_track_node"/>
+	<node pkg="bebop_track" type="bebop_teleop_node" name="bebop_teleop_node"/>
+</launch>
