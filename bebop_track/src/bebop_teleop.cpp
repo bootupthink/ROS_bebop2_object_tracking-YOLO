@@ -1,36 +1,47 @@
 #include <bebop_track/bebop_teleop.h>
 
-const bool trackOff = false;
-const bool trackOn = true;
-const std::string tracking = "/bebop/tracking";
+const bool off = false;
+const bool on = true;
 const char* BebopKeyBoardController::Interface[] = {
         "+-----------------------------------------------------+",
         "|                 Control your Bebop                  |",
-        "|        W      R                            8        |",
+        "|        W                                   8        |",
         "|                                                     |",
-        "|    A   S   D  F                        4   5   6    |",
+        "|    A   S   D                           4   5   6    |",
         "|                                                     |",
         "| throttle UP / DOWN : W / S                          |",
         "| rotation CCW / CW  : A / D                          |",
-        "| camera ?? / ??     : R / F                          |",
         "| FORWARD / BACKWARD : 8 / 5                          |",
         "| LEFT / RIGHT       : 4 / 6                          |",
         "| TAKE OFF / LAND    : Spacebar                       |",
         "| Tracking Mode      : T                              |",
+        "| SelfCamMode        : R                              |",
         "| Emergency          : P                              |",
         "| Quit               : Q                              |",
         "+-----------------------------------------------------+"
 };
 
+void BebopKeyBoardController::_setZeroValue()
+{
+    _controlValue.linear.x = 0;
+    _controlValue.linear.y = 0;
+    _controlValue.linear.z = 0;
+    _controlValue.angular.z = 0;
+    _controlValue.angular.x = 0;
+    _controlValue.angular.y = 0;
+}
+
 void BebopKeyBoardController::_printInterface()
 {
-    _nodeHandle.getParam(tracking, _isTracking);
+    _nodeHandle.getParam(_trackModeString, _isTracking);
+    _nodeHandle.getParam(_camModeString, _isCamMode);
     int result = system("clear");
     for(int i = 0; i < 16; ++i)
         std::cout << Interface[i] << std::endl;
-    std::cout << "[status] Takeoff : "<< ((_isTakeOff) ? "ON" : "OFF")
-    << "\tTracking Mode : " << (_isTracking ? "ON" : "OFF") << std::endl;
-    std::cout << "[Speed value] : " << _speedValue << std::endl;
+    std::cout << "[status] \n\nTakeoff : "<< ((_isTakeOff) ? "ON" : "OFF")
+    << "\nTracking Mode : " << (_isTracking ? "ON" : "OFF")
+    << "\nSelfCam Mode : " << ((_isCamMode) ? "ON" : "OFF") << std::endl;
+    std::cout << "\n[Speed value] : " << _speedValue << std::endl;
     std::cout << "[Speed Increase Value] : " << _speedIncreaseValue << std::endl;
 }
 
@@ -38,14 +49,27 @@ void BebopKeyBoardController::_move(double &value, int orientation)
 {
     if(_isTakeOff)
     {
-        _controlValue.linear.x = 0;
-        _controlValue.linear.y = 0;
-        _controlValue.linear.z = 0;
-        _controlValue.angular.z = 0;
+        _setZeroValue();
 
         value = _speedValue * orientation;
         _twistPublisher.publish(_controlValue);
     }
+}
+
+void BebopKeyBoardController::_runTrackMode()
+{
+    _nodeHandle.getParam(_trackModeString, _isTracking);
+    _nodeHandle.setParam(_trackModeString, !_isTracking);
+    _nodeHandle.setParam(_camModeString, off);
+    _printInterface();
+}
+
+void BebopKeyBoardController::_runSelfCamMode()
+{
+    _nodeHandle.getParam(_camModeString, _isTracking);
+    _nodeHandle.setParam(_camModeString, !_isTracking);
+    _nodeHandle.setParam(_trackModeString, off);
+    _printInterface();
 }
 
 void BebopKeyBoardController::_takeoff()
@@ -59,7 +83,8 @@ void BebopKeyBoardController::_land()
 {
     _isTakeOff = false;
     _landPublisher.publish(_message);
-    _nodeHandle.setParam(tracking, trackOff);
+    _nodeHandle.setParam(_trackModeString, off);
+    _nodeHandle.setParam(_camModeString, off);
     _printInterface();
 }
 
@@ -67,9 +92,9 @@ void BebopKeyBoardController::_emergency()
 {
     _isTakeOff = false;
     _emergencyPublisher.publish(_message);
-    _nodeHandle.setParam(tracking, trackOff);
+    _nodeHandle.setParam(_trackModeString, off);
+    _nodeHandle.setParam(_camModeString, off);
     _printInterface();
-    ROS_INFO("\n\nDrone Emergency Land!");
 }
 
 void BebopKeyBoardController::_speedUp()
@@ -104,12 +129,16 @@ BebopKeyBoardController::BebopKeyBoardController(const ros::NodeHandle& nodeHand
          _takeOffPublisher(_nodeHandle.advertise<std_msgs::Empty>("bebop/takeoff", 1)),
          _landPublisher(_nodeHandle.advertise<std_msgs::Empty>("bebop/land", 1)),
          _emergencyPublisher(_nodeHandle.advertise<std_msgs::Empty>("bebop/reset", 1)),
+         _trackModeString("/bebop/tracking"),
+         _camModeString("/bebop/selfcam"),
          _isTakeOff(false),
          _isTracking(false),
+         _isCamMode(false),
          _speedIncreaseValue(0.05),
          _speedValue(0.5)
 {
-    _nodeHandle.setParam(tracking, trackOff);
+    _nodeHandle.setParam(_trackModeString, off);
+    _nodeHandle.setParam(_camModeString, off);
     _printInterface();
 }
 
@@ -119,6 +148,8 @@ void BebopKeyBoardController::Control()
     double& y = _controlValue.linear.y = 0;
     double& z = _controlValue.linear.z = 0;
     double& rotation = _controlValue.angular.z = 0;
+    double& cameraX = _controlValue.angular.x = 0;
+    double& cameraY = _controlValue.angular.y = 0;
 
     char key;
 
@@ -138,22 +169,15 @@ void BebopKeyBoardController::Control()
             case 'p':
                 _emergency();
                 break;
+            case 'R':
+            case 'r':
+                if(_isTakeOff)
+                    _runSelfCamMode();
+                break;
             case 'T':
             case 't':
                 if(_isTakeOff)
-                {
-                    _nodeHandle.getParam(tracking, _isTracking);
-                    if(!_isTracking)
-                    {
-                        _nodeHandle.setParam(tracking, trackOn);
-                        _printInterface();
-                    }
-                    else
-                    {
-                        _nodeHandle.setParam(tracking, trackOff);
-                        _printInterface();
-                    }
-                }
+                    _runTrackMode();
                 break;
             case '+':
                 _speedUp();
@@ -178,12 +202,6 @@ void BebopKeyBoardController::Control()
             case 'D':
             case 'd':
                 _move(rotation, CW);
-                break;
-            case 'R':
-            case 'r':
-                break;
-            case 'F':
-            case 'f':
                 break;
             case '8':
                 _move(x, FORWARD);

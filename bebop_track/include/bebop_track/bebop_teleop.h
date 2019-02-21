@@ -17,9 +17,8 @@
 #define CCW 1
 #define CW -1
 
-extern const bool trackOff;
-extern const bool trackOn;
-extern const std::string tracking;
+extern const bool off;
+extern const bool on;
 
 class BebopKeyBoardController
 {
@@ -33,14 +32,21 @@ private:
     geometry_msgs::Twist _controlValue;
     std_msgs::Empty _message;
 
+    std::string _camModeString;
+    std::string _trackModeString;
+
     double _speedValue;
     double _speedIncreaseValue;
     bool _isTakeOff;
     bool _isTracking;
+    bool _isCamMode;
     static const char* Interface[];
 
+    void _setZeroValue();
     void _printInterface();
     void _move(double& value, int orientation);
+    void _runTrackMode();
+    void _runSelfCamMode();
     void _takeoff();
     void _land();
     void _emergency();

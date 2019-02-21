@@ -7,9 +7,6 @@
 #include <darknet_ros_msgs/BoundingBox.h>
 #include <darknet_ros_msgs/BoundingBoxes.h>
 
-extern const std::string tracking;
-extern const std::string darknet_Boxes_Topic;
-
 class BebopTrack
 {
 private:
@@ -18,12 +15,27 @@ private:
     ros::Subscriber _boxMessageSubscriber;
 
     geometry_msgs::Twist _bebopControlMessage;
+
+    std::string _darknet_Boxes_TopicName;
+    std::string _trackModeString;
+    std::string _camModeString;
+
     bool _isTracking;
+    bool _isCamMode;
+    bool _Camera;
+
+
+    long int _inCameraModeXmin;
+    long int _inCameraModeXmax;
+    long int _inCameraModeYmin;
+    long int _inCameraModeYmax;
 
     const int _frameMiddleX;
     const int _frameMiddleY;
 
     void _boxCallback(const darknet_ros_msgs::BoundingBoxes::ConstPtr& boxMessage);
+    void _runTracking(const darknet_ros_msgs::BoundingBox& boxMsg);
+    void _selfcam(const darknet_ros_msgs::BoundingBox& boxMsg);
 
 public:
     explicit BebopTrack(const ros::NodeHandle& nodeHandle);
